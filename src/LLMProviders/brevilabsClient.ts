@@ -2,9 +2,8 @@ import { BREVILABS_API_BASE_URL } from "@/constants";
 import { getDecryptedKey } from "@/encryptionService";
 import { MissingPlusLicenseError } from "@/error";
 import { logInfo } from "@/logger";
-import { turnOffPlus, turnOnPlus } from "@/plusUtils";
+import { turnOnPlus } from "@/plusUtils";
 import { getSettings } from "@/settings/model";
-import { arrayBufferToBase64 } from "@/utils/base64";
 
 export interface RerankResponse {
   response: {
@@ -194,123 +193,137 @@ export class BrevilabsClient {
   async validateLicenseKey(
     context?: Record<string, any>
   ): Promise<{ isValid: boolean | undefined; plan?: string }> {
-    // Build the request body with proper structure
-    const requestBody: Record<string, any> = {
-      license_key: await getDecryptedKey(getSettings().plusLicenseKey),
-    };
-
-    // Safely spread context if provided, ensuring no conflicts with required fields
-    if (context && typeof context === "object") {
-      // Filter out any undefined or null values from context
-      const filteredContext = Object.fromEntries(
-        Object.entries(context).filter(([_, value]) => value !== undefined && value !== null)
-      );
-
-      // Remove any reserved fields that must not be overridden by context
-      const reservedKeys = new Set(["license_key", "user_id"]);
-      for (const key of reservedKeys) {
-        if (key in filteredContext) {
-          delete (filteredContext as Record<string, unknown>)[key];
-        }
-      }
-
-      // Spread the filtered context into the request body
-      Object.assign(requestBody, filteredContext);
-    }
-
-    const { data, error } = await this.makeRequest<LicenseResponse>(
-      "/license",
-      requestBody,
-      "POST",
-      true,
-      true
-    );
-
-    if (error) {
-      if (error.message === "Invalid license key") {
-        turnOffPlus();
-        return { isValid: false };
-      }
-      // Do nothing if the error is not about the invalid license key
-      return { isValid: undefined };
-    }
+    // DISABLED: Brevilabs license validation bypassed - always return valid
     turnOnPlus();
-    return { isValid: true, plan: data?.plan };
+    return { isValid: true, plan: "believer" };
+
+    // Original code (commented out):
+    // // Build the request body with proper structure
+    // const requestBody: Record<string, any> = {
+    //   license_key: await getDecryptedKey(getSettings().plusLicenseKey),
+    // };
+    // // Safely spread context if provided, ensuring no conflicts with required fields
+    // if (context && typeof context === "object") {
+    //   // Filter out any undefined or null values from context
+    //   const filteredContext = Object.fromEntries(
+    //     Object.entries(context).filter(([_, value]) => value !== undefined && value !== null)
+    //   );
+    //   // Remove any reserved fields that must not be overridden by context
+    //   const reservedKeys = new Set(["license_key", "user_id"]);
+    //   for (const key of reservedKeys) {
+    //     if (key in filteredContext) {
+    //       delete (filteredContext as Record<string, unknown>)[key];
+    //     }
+    //   }
+    //   // Spread the filtered context into the request body
+    //   Object.assign(requestBody, filteredContext);
+    // }
+    // const { data, error } = await this.makeRequest<LicenseResponse>(
+    //   "/license",
+    //   requestBody,
+    //   "POST",
+    //   true,
+    //   true
+    // );
+    // if (error) {
+    //   if (error.message === "Invalid license key") {
+    //     turnOffPlus();
+    //     return { isValid: false };
+    //   }
+    //   // Do nothing if the error is not about the invalid license key
+    //   return { isValid: undefined };
+    // }
+    // turnOnPlus();
+    // return { isValid: true, plan: data?.plan };
   }
 
   async rerank(query: string, documents: string[]): Promise<RerankResponse> {
-    const { data, error } = await this.makeRequest<RerankResponse>("/rerank", {
-      query,
-      documents,
-      model: "rerank-2",
-    });
-    if (error) {
-      throw error;
-    }
-    if (!data) {
-      throw new Error("No data returned from rerank");
-    }
+    // DISABLED: Brevilabs rerank service bypassed
+    // Return mock response with original document order
+    throw new Error(
+      "Brevilabs rerank service is disabled. Please use alternative ranking methods."
+    );
 
-    return data;
+    // Original code (commented out):
+    // const { data, error } = await this.makeRequest<RerankResponse>("/rerank", {
+    //   query,
+    //   documents,
+    //   model: "rerank-2",
+    // });
+    // if (error) {
+    //   throw error;
+    // }
+    // if (!data) {
+    //   throw new Error("No data returned from rerank");
+    // }
+    // return data;
   }
 
   async url4llm(url: string): Promise<Url4llmResponse> {
-    const { data, error } = await this.makeRequest<Url4llmResponse>("/url4llm", { url });
-    if (error) {
-      throw error;
-    }
-    if (!data) {
-      throw new Error("No data returned from url4llm");
-    }
+    // DISABLED: Brevilabs url4llm service bypassed
+    throw new Error(
+      "Brevilabs url4llm service is disabled. Please use alternative URL processing methods."
+    );
 
-    return data;
+    // Original code (commented out):
+    // const { data, error } = await this.makeRequest<Url4llmResponse>("/url4llm", { url });
+    // if (error) {
+    //   throw error;
+    // }
+    // if (!data) {
+    //   throw new Error("No data returned from url4llm");
+    // }
+    // return data;
   }
 
   async pdf4llm(binaryContent: ArrayBuffer): Promise<Pdf4llmResponse> {
-    // Convert ArrayBuffer to base64 string
-    const base64Content = arrayBufferToBase64(binaryContent);
+    // DISABLED: Brevilabs pdf4llm service bypassed
+    throw new Error(
+      "Brevilabs pdf4llm service is disabled. Please use alternative PDF processing methods."
+    );
 
-    const { data, error } = await this.makeRequest<Pdf4llmResponse>("/pdf4llm", {
-      pdf: base64Content,
-    });
-    if (error) {
-      throw error;
-    }
-    if (!data) {
-      throw new Error("No data returned from pdf4llm");
-    }
-
-    return data;
+    // Original code (commented out):
+    // // Convert ArrayBuffer to base64 string
+    // const base64Content = arrayBufferToBase64(binaryContent);
+    // const { data, error } = await this.makeRequest<Pdf4llmResponse>("/pdf4llm", {
+    //   pdf: base64Content,
+    // });
+    // if (error) {
+    //   throw error;
+    // }
+    // if (!data) {
+    //   throw new Error("No data returned from pdf4llm");
+    // }
+    // return data;
   }
 
   async docs4llm(binaryContent: ArrayBuffer, fileType: string): Promise<Docs4llmResponse> {
-    // Create a FormData object
-    const formData = new FormData();
+    // DISABLED: Brevilabs docs4llm service bypassed
+    throw new Error(
+      "Brevilabs docs4llm service is disabled. Please use alternative document processing methods."
+    );
 
-    // Convert ArrayBuffer to Blob with appropriate mime type
-    const mimeType = this.getMimeTypeFromExtension(fileType);
-    const blob = new Blob([binaryContent], { type: mimeType });
-
-    // Create a File object with a filename including the extension
-    const fileName = `file.${fileType}`;
-    const file = new File([blob], fileName, { type: mimeType });
-
-    // Append the file to FormData
-    formData.append("files", file);
-
-    // Add file_type as a regular field
-    formData.append("file_type", fileType);
-
-    const { data, error } = await this.makeFormDataRequest<Docs4llmResponse>("/docs4llm", formData);
-
-    if (error) {
-      throw error;
-    }
-    if (!data) {
-      throw new Error("No data returned from docs4llm");
-    }
-
-    return data;
+    // Original code (commented out):
+    // // Create a FormData object
+    // const formData = new FormData();
+    // // Convert ArrayBuffer to Blob with appropriate mime type
+    // const mimeType = this.getMimeTypeFromExtension(fileType);
+    // const blob = new Blob([binaryContent], { type: mimeType });
+    // // Create a File object with a filename including the extension
+    // const fileName = `file.${fileType}`;
+    // const file = new File([blob], fileName, { type: mimeType });
+    // // Append the file to FormData
+    // formData.append("files", file);
+    // // Add file_type as a regular field
+    // formData.append("file_type", fileType);
+    // const { data, error } = await this.makeFormDataRequest<Docs4llmResponse>("/docs4llm", formData);
+    // if (error) {
+    //   throw error;
+    // }
+    // if (!data) {
+    //   throw new Error("No data returned from docs4llm");
+    // }
+    // return data;
   }
 
   private getMimeTypeFromExtension(extension: string): string {
@@ -355,27 +368,37 @@ export class BrevilabsClient {
   }
 
   async webSearch(query: string): Promise<WebSearchResponse> {
-    const { data, error } = await this.makeRequest<WebSearchResponse>("/websearch", { query });
-    if (error) {
-      throw error;
-    }
-    if (!data) {
-      throw new Error("No data returned from websearch");
-    }
+    // DISABLED: Brevilabs web search service bypassed
+    throw new Error(
+      "Brevilabs web search service is disabled. Please use alternative search methods."
+    );
 
-    return data;
+    // Original code (commented out):
+    // const { data, error } = await this.makeRequest<WebSearchResponse>("/websearch", { query });
+    // if (error) {
+    //   throw error;
+    // }
+    // if (!data) {
+    //   throw new Error("No data returned from websearch");
+    // }
+    // return data;
   }
 
   async youtube4llm(url: string): Promise<Youtube4llmResponse> {
-    const { data, error } = await this.makeRequest<Youtube4llmResponse>("/youtube4llm", { url });
-    if (error) {
-      throw error;
-    }
-    if (!data) {
-      throw new Error("No data returned from youtube4llm");
-    }
+    // DISABLED: Brevilabs youtube4llm service bypassed
+    throw new Error(
+      "Brevilabs youtube4llm service is disabled. Please use alternative YouTube transcription methods."
+    );
 
-    return data;
+    // Original code (commented out):
+    // const { data, error } = await this.makeRequest<Youtube4llmResponse>("/youtube4llm", { url });
+    // if (error) {
+    //   throw error;
+    // }
+    // if (!data) {
+    //   throw new Error("No data returned from youtube4llm");
+    // }
+    // return data;
   }
 
   async twitter4llm(url: string): Promise<Twitter4llmResponse> {
