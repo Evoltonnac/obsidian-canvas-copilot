@@ -71,75 +71,43 @@ export class CanvasLoader {
 
   /** Build a concise prompt for an LLM. */
   buildPrompt(canvas: CanvasData): string {
-    // First, build a map of group contents
-    const groupContents = new Map<string, RichNode[]>();
-    const groups = canvas.nodes.filter((n) => n.type === "group");
+    const lines: string[] = [];
+    lines.push(`Canvas contains ${canvas.nodes.length} nodes and ${canvas.edges.length} edges.\n`);
 
-    for (const group of groups) {
-      const containedNodes = canvas.nodes.filter((n) => {
-        if (n.id === group.id) return false;
-        const nodeX = n.x + n.width / 2;
-        const nodeY = n.y + n.height / 2;
-        return (
-          nodeX >= group.x &&
-          nodeY >= group.y &&
-          nodeX <= group.x + group.width &&
-          nodeY <= group.y + group.height
-        );
-      });
-      groupContents.set(group.label || group.id, containedNodes);
-    }
+    lines.push("## Nodes\n");
+    for (const node of canvas.nodes) {
+      lines.push(`### Node: ${node.id} (${node.type})`);
+      lines.push(`Position: (${node.x}, ${node.y}) Size: ${node.width}x${node.height}`);
 
-    // Build a clear, structured description
-    let description = `This canvas contains the following elements:\n\n`;
-
-    // Helper function to format node content
-    const formatNodeContent = (node: RichNode): string => {
       switch (node.type) {
-        case "file":
-          return `- File: ${node.file}\nContent:\n${node.content}\n`;
         case "text":
-          return `- Text: "${node.text}"\n`;
+          lines.push(`Content: ${node.text || ""}`);
+          break;
+        case "file":
+          lines.push(`File: ${node.file || ""}`);
+          if (node.content) {
+            lines.push(`File Content:\n${node.content}`);
+          }
+          break;
         case "link":
-          return `- Link: ${node.url}\n`;
-        default:
-          return "";
+          lines.push(`URL: ${node.url || ""}`);
+          break;
+        case "group":
+          lines.push(`Label: ${node.label || "(no label)"}`);
+          break;
       }
-    };
-
-    // Describe groups and their contents
-    groups.forEach((group) => {
-      const groupName = group.label || group.id;
-      const contents = groupContents.get(groupName) || [];
-      description += `Group "${groupName}" contains:\n`;
-      contents.forEach((node) => {
-        description += formatNodeContent(node);
-      });
-      description += "\n";
-    });
-
-    // Describe non-grouped elements
-    const ungroupedNodes = canvas.nodes.filter((n) => {
-      if (n.type === "group") return false;
-      return !Array.from(groupContents.values())
-        .flat()
-        .some((gn) => gn.id === n.id);
-    });
-
-    if (ungroupedNodes.length > 0) {
-      description += "Elements outside of groups:\n";
-      ungroupedNodes.forEach((node) => {
-        description += formatNodeContent(node);
-      });
+      lines.push("");
     }
 
-    description += "\nWhen describing this canvas, please:\n";
-    description += "- Use the actual titles/names of elements instead of their IDs\n";
-    description += "- Pay attention to the content and relationships between elements\n";
-    description +=
-      "- Describe files by their names, links by their URLs, and text nodes by their content\n";
+    if (canvas.edges.length > 0) {
+      lines.push("## Edges\n");
+      for (const edge of canvas.edges) {
+        const labelPart = edge.label ? ` "${edge.label}"` : "";
+        lines.push(`- ${edge.fromNode} → ${edge.toNode}${labelPart}`);
+      }
+    }
 
-    return description;
+    return lines.join("\n");
   }
 
   /* ---------- private helpers ---------- */

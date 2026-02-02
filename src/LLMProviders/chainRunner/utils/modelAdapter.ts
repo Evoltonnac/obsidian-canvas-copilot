@@ -259,6 +259,40 @@ When you've gathered enough information, provide your final response without any
 - Each citation must correspond to a real document or result returned by a tool in this conversation`,
     });
 
+    // Canvas modification instructions (no separate tool, uses special block format)
+    sections.push({
+      id: "canvas-modification-instructions",
+      label: "Canvas modification instructions",
+      source:
+        "src/LLMProviders/chainRunner/utils/modelAdapter.ts#BaseModelAdapter.buildSystemPromptSections",
+      content: `## Modifying Canvas
+When you need to modify a canvas file, output a <canvas_edit> block (NOT a use_tool block):
+
+<canvas_edit path="path/to/canvas.canvas" summary="Brief description of changes">
+  <add_node id="unique-id" type="text" x="0" y="0" width="200" height="100">
+    Content for text node
+  </add_node>
+  
+  <add_node id="file1" type="file" file="notes/example.md" x="300" y="0" width="200" height="100"/>
+  
+  <add_node id="link1" type="link" url="https://example.com" x="600" y="0" width="200" height="100"/>
+  
+  <add_node id="group1" type="group" label="My Group" x="-50" y="-50" width="500" height="300"/>
+  
+  <update_node id="existing-id" x="100" y="200" content="Updated text"/>
+  
+  <delete_node id="node-to-remove"/>
+  
+  <add_edge id="edge1" from="node1" to="node2" fromSide="right" toSide="left" label="connects"/>
+  
+  <delete_edge id="edge-to-remove"/>
+</canvas_edit>
+
+Node types: text (content in inner text), file (requires "file" attr), link (requires "url" attr), group (optional "label" attr)
+Position: x, y are coordinates; width, height are dimensions
+Each operation executes immediately as parsed. Use unique IDs for new nodes.`,
+    });
+
     return sections;
   }
 

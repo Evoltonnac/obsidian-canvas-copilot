@@ -45,6 +45,8 @@ import {
   QueryExpansionInfo,
 } from "./utils/AgentReasoningState";
 import { QueryExpander } from "@/search/v3/QueryExpander";
+import { CanvasOperationStreamer, containsCanvasEdit } from "./CanvasOperationStreamer";
+import { executeCanvasOperation, setCanvasToolVault } from "@/tools/CanvasTools";
 
 type AgentSource = {
   title: string;
@@ -534,7 +536,7 @@ export class AutonomousAgentChainRunner extends CopilotPlusChainRunner {
     if (typeof chatModel.bindTools !== "function") {
       throw new Error(
         `Model ${modelName} does not support native tool calling (bindTools not available). ` +
-          `Agent mode requires a model with tool calling support.`
+        `Agent mode requires a model with tool calling support.`
       );
     }
     const boundModel = chatModel.bindTools(availableTools);
@@ -682,7 +684,17 @@ export class AutonomousAgentChainRunner extends CopilotPlusChainRunner {
         messages.push(aiMessage);
 
         // Final response is ONLY this iteration's content, not accumulated intermediate content
-        const finalContent = content;
+        let finalContent = content;
+
+        // Check for canvas_edit blocks and execute them
+        let canvasSummary: string | null = null;
+        if (containsCanvasEdit(finalContent)) {
+          const canvasResults = await this.executeCanvasOperations(finalContent);
+          // Remove canvas_edit blocks from the displayed content
+          finalContent = this.stripCanvasEditBlocks(finalContent);
+          canvasSummary = canvasResults.summary;
+        }
+
         const reasoningBlock = this.buildReasoningBlockMarkup();
 
         // Stream the final response progressively for better UX
@@ -703,10 +715,15 @@ export class AutonomousAgentChainRunner extends CopilotPlusChainRunner {
           }
         }
 
-        // Final update with complete content
-        const finalResponse = reasoningBlock
+        // Final update with complete content including canvas summary if present
+        let finalResponse = reasoningBlock
           ? reasoningBlock + "\n\n" + finalContent
           : finalContent;
+
+        if (canvasSummary) {
+          finalResponse += "\n\n" + canvasSummary;
+        }
+
         updateCurrentAiMessage(finalResponse);
 
         return {
@@ -901,7 +918,7 @@ export class AutonomousAgentChainRunner extends CopilotPlusChainRunner {
     // Use ThinkBlockStreamer with excludeThinking=true to strip thinking content
     // Agent mode should never show thinking tokens in the response
     const thinkStreamer = new ThinkBlockStreamer(
-      () => {}, // No-op update function - we don't display intermediate content
+      () => { }, // No-op update function - we don't display intermediate content
       true // excludeThinking = true for agent mode
     );
 
@@ -974,5 +991,93 @@ export class AutonomousAgentChainRunner extends CopilotPlusChainRunner {
       }
       throw error;
     }
+  }
+
+  /**
+   * Execute canvas operations found in the response.
+   */
+  private async executeCanvasOperations(
+    responseContent: string
+  ): Promise<{ summary: string | null; successCount: number; failCount: number }> {
+    const vault = this.chainManager.app?.vault;
+    if (!vault) {
+      logWarn("[Agent] No vault available for canvas operations");
+      return { summary: null, successCount: 0, failCount: 0 };
+    }
+
+    setCanvasToolVault(vault);
+    const operationStreamer = new CanvasOperationStreamer();
+
+    // Collect operations from the async generator to check count and get canvas path
+    const operationsList: { type: string; id: string }[] = [];
+
+    for await (const operation of operationStreamer.processChunk(responseContent)) {
+      operationsList.push({ type: operation.type, id: operation.id });
+    }
+
+    const canvasPath = operationStreamer.getCanvasPath();
+    if (!canvasPath) {
+      logWarn("[Agent] No canvas path found in canvas_edit block");
+      return { summary: null, successCount: 0, failCount: 0 };
+    }
+
+    if (operationsList.length === 0) {
+      return { summary: null, successCount: 0, failCount: 0 };
+    }
+
+    logInfo(`[Agent] Executing ${operationsList.length} canvas operations on ${canvasPath}`);
+
+    // Re-process to get operations and execute them
+    const streamer2 = new CanvasOperationStreamer();
+    let successCount = 0;
+    let failCount = 0;
+    const resultDetails: string[] = [];
+
+    for await (const operation of streamer2.processChunk(responseContent)) {
+      try {
+        const result = await executeCanvasOperation(vault, canvasPath, operation);
+        if (result.success) {
+          successCount++;
+          resultDetails.push(`✅ \`${operation.type}\` (${operation.id})`);
+          logInfo(`[Agent] Canvas operation succeeded: ${operation.type} (${operation.id})`);
+        } else {
+          failCount++;
+          resultDetails.push(`❌ \`${operation.type}\` (${operation.id}): ${result.error}`);
+          logWarn(`[Agent] Canvas operation failed: ${result.error}`);
+        }
+      } catch (error) {
+        failCount++;
+        resultDetails.push(`❌ \`${operation.type}\` (${operation.id}): ${String(error)}`);
+        logError("[Agent] Canvas operation error:", error);
+      }
+    }
+
+    const editSummary = streamer2.getSummary();
+    const summary = [
+      "---",
+      `**Canvas Update:** ${editSummary || "Operations completed"}`,
+      `- ✅ Successful: ${successCount}`,
+      ...(failCount > 0 ? [`- ❌ Failed: ${failCount}`] : []),
+      "",
+      "**Details:**",
+      ...resultDetails.map((r) => `- ${r}`),
+    ].join("\n");
+
+    return { summary, successCount, failCount };
+  }
+
+  /**
+   * Strip canvas_edit blocks from text.
+   */
+  private stripCanvasEditBlocks(text: string): string {
+    // Remove complete canvas_edit blocks
+    const completeBlockRegex = /<canvas_edit[^>]*>[\s\S]*?<\/canvas_edit>/gi;
+    let result = text.replace(completeBlockRegex, "");
+
+    // Remove incomplete opening tags at the end
+    const incompleteRegex = /<canvas_edit[^>]*>[\s\S]*$/i;
+    result = result.replace(incompleteRegex, "");
+
+    return result.trim();
   }
 }
