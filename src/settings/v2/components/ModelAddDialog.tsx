@@ -253,6 +253,13 @@ export const ModelAddDialog: React.FC<ModelAddDialogProps> = ({
         : {
             bedrockRegion: undefined,
           }),
+      ...(provider === ChatModelProviders.GOOGLE_VERTEX_AI
+        ? {
+            vertexAIRegion: settings.googleVertexAIRegion,
+          }
+        : {
+            vertexAIRegion: undefined,
+          }),
     });
     // 当 Provider 有必填额外设置时自动展开
     setIsOpen(hasRequiredExtraSettings(provider));
@@ -443,6 +450,49 @@ export const ModelAddDialog: React.FC<ModelAddDialogProps> = ({
                       "eu-west-1",
                       "ap-northeast-1",
                       "ap-southeast-1",
+                    ].map((region) => (
+                      <SelectItem key={region} value={region}>
+                        {region}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </FormField>
+          );
+        case ChatModelProviders.GOOGLE_VERTEX_AI:
+          return (
+            <FormField
+              label="Region (optional)"
+              description="Defaults to us-central1 when left blank. Choose a region close to your location for lower latency."
+            >
+              <div className="tw-flex tw-gap-2">
+                <Input
+                  className="tw-flex-1"
+                  type="text"
+                  placeholder="Enter GCP region (e.g. us-central1)"
+                  value={model.vertexAIRegion || ""}
+                  onChange={(e) => {
+                    updateModelWithReset({ vertexAIRegion: e.target.value });
+                  }}
+                />
+                <Select
+                  onValueChange={(value) => {
+                    updateModelWithReset({ vertexAIRegion: value });
+                  }}
+                >
+                  <SelectTrigger className="tw-w-[140px]">
+                    <SelectValue placeholder="Presets" />
+                  </SelectTrigger>
+                  <SelectContent container={dialogElement}>
+                    {[
+                      "us-central1",
+                      "us-east4",
+                      "us-west1",
+                      "europe-west1",
+                      "europe-west4",
+                      "asia-northeast1",
+                      "asia-southeast1",
                     ].map((region) => (
                       <SelectItem key={region} value={region}>
                         {region}

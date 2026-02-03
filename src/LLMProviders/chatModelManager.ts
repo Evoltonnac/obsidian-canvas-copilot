@@ -38,6 +38,8 @@ import { MissingApiKeyError, MissingPlusLicenseError } from "@/error";
 import { Notice } from "obsidian";
 import { ChatOpenRouter } from "./ChatOpenRouter";
 import { BedrockChatModel, type BedrockChatModelFields } from "./BedrockChatModel";
+import { VertexAIChatModel, type VertexAIChatModelFields } from "./VertexAIChatModel";
+import { buildVertexAIBaseConfig } from "./VertexAIAuth";
 import { GitHubCopilotChatModel } from "@/LLMProviders/githubCopilot/GitHubCopilotChatModel";
 
 type ChatConstructorType = {
@@ -50,6 +52,7 @@ const CHAT_PROVIDER_CONSTRUCTORS = {
   [ChatModelProviders.ANTHROPIC]: ChatAnthropic,
   [ChatModelProviders.COHEREAI]: ChatCohere,
   [ChatModelProviders.GOOGLE]: ChatGoogleGenerativeAI,
+  [ChatModelProviders.GOOGLE_VERTEX_AI]: VertexAIChatModel,
   [ChatModelProviders.XAI]: ChatXAI,
   [ChatModelProviders.OPENROUTERAI]: ChatOpenRouter,
   [ChatModelProviders.OLLAMA]: ChatOllama,
@@ -83,6 +86,7 @@ export default class ChatModelManager {
   private readonly providerApiKeyMap: Record<ChatModelProviders, () => string> = {
     [ChatModelProviders.OPENAI]: () => getSettings().openAIApiKey,
     [ChatModelProviders.GOOGLE]: () => getSettings().googleApiKey,
+    [ChatModelProviders.GOOGLE_VERTEX_AI]: () => getSettings().googleVertexAIServiceAccountKey,
     [ChatModelProviders.AZURE_OPENAI]: () => getSettings().azureOpenAIApiKey,
     [ChatModelProviders.ANTHROPIC]: () => getSettings().anthropicApiKey,
     [ChatModelProviders.COHEREAI]: () => getSettings().cohereApiKey,
@@ -362,6 +366,7 @@ export default class ChatModelManager {
         },
       },
       [ChatModelProviders.AMAZON_BEDROCK]: {} as BedrockChatModelFields,
+      [ChatModelProviders.GOOGLE_VERTEX_AI]: {} as VertexAIChatModelFields,
       [ChatModelProviders.GITHUB_COPILOT]: {
         modelName: modelName,
         // Use safeFetchNoThrow for CORS bypass on mobile platforms.
@@ -377,6 +382,16 @@ export default class ChatModelManager {
 
     if (customModel.provider === ChatModelProviders.AMAZON_BEDROCK) {
       selectedProviderConfig = await this.buildBedrockConfig(
+        customModel,
+        modelName,
+        settings,
+        maxTokens,
+        resolvedTemperature
+      );
+    }
+
+    if (customModel.provider === ChatModelProviders.GOOGLE_VERTEX_AI) {
+      selectedProviderConfig = await this.buildVertexAIConfig(
         customModel,
         modelName,
         settings,
@@ -507,6 +522,52 @@ export default class ChatModelManager {
       anthropicVersion,
       enableThinking,
       fetchImplementation,
+      streaming: customModel.stream ?? true,
+    };
+  }
+
+  /**
+   * Builds configuration for Google Vertex AI models.
+   * Uses service account JSON key for authentication.
+   * @param customModel - The model definition provided by the user.
+   * @param modelName - The Gemini model identifier to use.
+   * @param settings - Current Copilot settings.
+   * @param maxTokens - Maximum completion tokens requested for the invocation.
+   * @param temperature - Optional temperature override for the invocation.
+   */
+  private async buildVertexAIConfig(
+    customModel: CustomModel,
+    modelName: string,
+    settings: CopilotSettings,
+    maxTokens: number,
+    temperature: number | undefined
+  ): Promise<VertexAIChatModelFields> {
+    const serviceAccountKey = customModel.apiKey || settings.googleVertexAIServiceAccountKey;
+    if (!serviceAccountKey) {
+      throw new Error(
+        "Google Vertex AI service account key is not configured. Provide a JSON key in Settings > API Keys or the model definition."
+      );
+    }
+
+    const decryptedKey = await getDecryptedKey(serviceAccountKey);
+    const region =
+      customModel.vertexAIRegion?.trim() || settings.googleVertexAIRegion || "us-central1";
+
+    // Use shared config builder
+    const baseConfig = buildVertexAIBaseConfig(
+      decryptedKey,
+      region,
+      customModel.enableCors,
+      safeFetch
+    );
+
+    return {
+      modelId: modelName,
+      modelName,
+      ...baseConfig,
+      defaultMaxTokens: maxTokens,
+      defaultTemperature: temperature,
+      defaultTopP: customModel.topP,
       streaming: customModel.stream ?? true,
     };
   }

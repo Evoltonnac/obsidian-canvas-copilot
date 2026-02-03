@@ -169,6 +169,9 @@ export interface CustomModel {
   // Amazon Bedrock specific fields
   bedrockRegion?: string;
 
+  // Google Vertex AI specific fields
+  vertexAIRegion?: string;
+
   // OpenAI GPT-5 and O-series specific fields
   reasoningEffort?: ReasoningEffort;
   verbosity?: Verbosity;

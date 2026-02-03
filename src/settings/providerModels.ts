@@ -383,6 +383,7 @@ export interface GitHubCopilotModel {
 export interface ProviderResponseMap {
   [ChatModelProviders.OPENAI]: OpenAIModelResponse;
   [ChatModelProviders.GOOGLE]: GoogleModelResponse;
+  [ChatModelProviders.GOOGLE_VERTEX_AI]: GoogleModelResponse;
   [ChatModelProviders.ANTHROPIC]: AnthropicModelResponse;
   [ChatModelProviders.MISTRAL]: MistralModelResponse;
   [ChatModelProviders.COHEREAI]: CohereModelResponse;
@@ -472,6 +473,17 @@ export const providerAdapters: ProviderModelAdapters = {
       provider: ChatModelProviders.XAI,
     })) || [],
   [ChatModelProviders.AMAZON_BEDROCK]: (_data: unknown): StandardModel[] => [],
+
+  [ChatModelProviders.GOOGLE_VERTEX_AI]: (data): StandardModel[] =>
+    data.models?.map((model) => {
+      // Vertex AI uses same format as Google AI (Gemini)
+      const name = model.name.split("models/")?.[1] || model.name;
+      return {
+        id: name,
+        name: name,
+        provider: ChatModelProviders.GOOGLE_VERTEX_AI,
+      };
+    }) || [],
 
   [ChatModelProviders.OPENROUTERAI]: (data): StandardModel[] =>
     data.data?.map((model) => ({

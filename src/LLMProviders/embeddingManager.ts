@@ -14,6 +14,8 @@ import { Notice } from "obsidian";
 import { BrevilabsClient } from "./brevilabsClient";
 import { CustomJinaEmbeddings } from "./CustomJinaEmbeddings";
 import { CustomOpenAIEmbeddings } from "./CustomOpenAIEmbeddings";
+import { VertexAIEmbeddings } from "./VertexAIEmbeddings";
+import { buildVertexAIBaseConfig } from "./VertexAIAuth";
 
 type EmbeddingConstructorType = new (config: any) => Embeddings;
 
@@ -23,6 +25,7 @@ const EMBEDDING_PROVIDER_CONSTRUCTORS = {
   [EmbeddingModelProviders.OPENAI]: OpenAIEmbeddings,
   [EmbeddingModelProviders.COHEREAI]: CohereEmbeddings,
   [EmbeddingModelProviders.GOOGLE]: GoogleGenerativeAIEmbeddings,
+  [EmbeddingModelProviders.GOOGLE_VERTEX_AI]: VertexAIEmbeddings,
   [EmbeddingModelProviders.AZURE_OPENAI]: AzureOpenAIEmbeddings,
   [EmbeddingModelProviders.OLLAMA]: OllamaEmbeddings,
   [EmbeddingModelProviders.LM_STUDIO]: CustomOpenAIEmbeddings,
@@ -52,6 +55,7 @@ export default class EmbeddingManager {
     [EmbeddingModelProviders.OPENAI]: () => getSettings().openAIApiKey,
     [EmbeddingModelProviders.COHEREAI]: () => getSettings().cohereApiKey,
     [EmbeddingModelProviders.GOOGLE]: () => getSettings().googleApiKey,
+    [EmbeddingModelProviders.GOOGLE_VERTEX_AI]: () => getSettings().googleVertexAIServiceAccountKey,
     [EmbeddingModelProviders.AZURE_OPENAI]: () => getSettings().azureOpenAIApiKey,
     [EmbeddingModelProviders.OLLAMA]: () => "default-key",
     [EmbeddingModelProviders.LM_STUDIO]: () => "default-key",
@@ -300,6 +304,16 @@ export default class EmbeddingManager {
           baseURL: customModel.baseUrl || "https://openrouter.ai/api/v1",
           fetch: customModel.enableCors ? safeFetch : undefined,
         },
+      },
+      [EmbeddingModelProviders.GOOGLE_VERTEX_AI]: {
+        modelName,
+        ...buildVertexAIBaseConfig(
+          await getDecryptedKey(customModel.apiKey || settings.googleVertexAIServiceAccountKey),
+          customModel.vertexAIRegion || settings.googleVertexAIRegion || "us-central1",
+          customModel.enableCors,
+          safeFetch
+        ),
+        batchSize: getSettings().embeddingBatchSize,
       },
     };
 

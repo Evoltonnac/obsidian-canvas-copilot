@@ -206,6 +206,7 @@ export enum ChatModelProviders {
   OPENAI_FORMAT = "3rd party (openai-format)",
   ANTHROPIC = "anthropic",
   GOOGLE = "google",
+  GOOGLE_VERTEX_AI = "google-vertexai",
   XAI = "xai",
   AMAZON_BEDROCK = "amazon-bedrock",
   AZURE_OPENAI = "azure openai",
@@ -430,6 +431,7 @@ export enum EmbeddingModelProviders {
   OPENROUTERAI = "openrouterai",
   COHEREAI = "cohereai",
   GOOGLE = "google",
+  GOOGLE_VERTEX_AI = "google-vertexai",
   AZURE_OPENAI = "azure openai",
   OLLAMA = "ollama",
   LM_STUDIO = "lm-studio",
@@ -715,6 +717,14 @@ export const ProviderInfo: Record<Provider, ProviderMetadata> = {
     keyManagementURL: "https://github.com/settings/apps/authorizations",
     listModelURL: "",
   },
+  [ChatModelProviders.GOOGLE_VERTEX_AI]: {
+    label: "Google Vertex AI",
+    host: "https://{region}-aiplatform.googleapis.com",
+    curlBaseURL: "https://{region}-aiplatform.googleapis.com/v1",
+    keyManagementURL: "https://console.cloud.google.com/iam-admin/serviceaccounts",
+    listModelURL: "",
+    testModel: ChatModels.GEMINI_FLASH,
+  },
 };
 
 // Map provider to its settings key for API key
@@ -723,6 +733,7 @@ export const ProviderSettingsKeyMap: Record<SettingKeyProviders, keyof CopilotSe
   openai: "openAIApiKey",
   "azure openai": "azureOpenAIApiKey",
   google: "googleApiKey",
+  "google-vertexai": "googleVertexAIServiceAccountKey",
   groq: "groqApiKey",
   openrouterai: "openRouterAiApiKey",
   cohereai: "cohereApiKey",
@@ -777,6 +788,7 @@ export const COMMAND_IDS = {
   TOGGLE_COPILOT_CHAT_WINDOW: "chat-toggle-window",
   ADD_SELECTION_TO_CHAT_CONTEXT: "add-selection-to-chat-context",
   ADD_WEB_SELECTION_TO_CHAT_CONTEXT: "add-web-selection-to-chat-context",
+  ADD_CANVAS_SELECTION_TO_CHAT_CONTEXT: "add-canvas-selection-to-chat-context",
   ADD_CUSTOM_COMMAND: "add-custom-command",
   APPLY_CUSTOM_COMMAND: "apply-custom-command",
   OPEN_LOG_FILE: "open-log-file",
@@ -806,6 +818,7 @@ export const COMMAND_NAMES: Record<CommandId, string> = {
   [COMMAND_IDS.TOGGLE_COPILOT_CHAT_WINDOW]: "Toggle Copilot Chat Window",
   [COMMAND_IDS.ADD_SELECTION_TO_CHAT_CONTEXT]: "Add selection to chat context",
   [COMMAND_IDS.ADD_WEB_SELECTION_TO_CHAT_CONTEXT]: "Add web selection to chat context",
+  [COMMAND_IDS.ADD_CANVAS_SELECTION_TO_CHAT_CONTEXT]: "Add canvas selection to chat context",
   [COMMAND_IDS.ADD_CUSTOM_COMMAND]: "Add new custom command",
   [COMMAND_IDS.APPLY_CUSTOM_COMMAND]: "Apply custom command",
   [COMMAND_IDS.OPEN_LOG_FILE]: "Create log file",
@@ -851,6 +864,9 @@ export const DEFAULT_SETTINGS: CopilotSettings = {
   githubCopilotAccessToken: "",
   githubCopilotToken: "",
   githubCopilotTokenExpiresAt: 0,
+  // Google Vertex AI
+  googleVertexAIServiceAccountKey: "",
+  googleVertexAIRegion: "us-central1",
   defaultChainType: ChainType.LLM_CHAIN,
   defaultModelKey: ChatModels.OPENROUTER_GEMINI_2_5_FLASH + "|" + ChatModelProviders.OPENROUTERAI,
   embeddingModelKey:

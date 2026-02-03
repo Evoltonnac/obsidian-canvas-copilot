@@ -70,6 +70,9 @@ export interface CopilotSettings {
   githubCopilotAccessToken: string;
   githubCopilotToken: string;
   githubCopilotTokenExpiresAt: number;
+  // Google Vertex AI
+  googleVertexAIServiceAccountKey: string;
+  googleVertexAIRegion: string;
   defaultChainType: ChainType;
   defaultModelKey: string;
   embeddingModelKey: string;
