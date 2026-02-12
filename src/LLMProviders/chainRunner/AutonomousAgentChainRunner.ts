@@ -14,8 +14,35 @@ import { err2String, withSuppressedTokenWarnings } from "@/utils";
 import { AIMessage, BaseMessage, HumanMessage, SystemMessage } from "@langchain/core/messages";
 import { CopilotPlusChainRunner } from "./CopilotPlusChainRunner";
 import { loadAndAddChatHistory } from "./utils/chatHistoryUtils";
-import { ModelAdapter, ModelAdapterFactory } from "./utils/modelAdapter";
+import { ModelAdapterFactory } from "./utils/modelAdapter";
 import { ThinkBlockStreamer } from "./utils/ThinkBlockStreamer";
+
+const CANVAS_MODIFICATION_INSTRUCTIONS = `## Modifying Canvas
+When you need to modify a canvas file, output a <canvas_edit> block (NOT a use_tool block):
+
+<canvas_edit path="path/to/canvas.canvas" summary="Brief description of changes">
+  <add_node id="unique-id" type="text" x="0" y="0" width="200" height="100">
+    Content for text node
+  </add_node>
+  
+  <add_node id="file1" type="file" file="notes/example.md" x="300" y="0" width="200" height="100"/>
+  
+  <add_node id="link1" type="link" url="https://example.com" x="600" y="0" width="200" height="100"/>
+  
+  <add_node id="group1" type="group" label="My Group" x="-50" y="-50" width="500" height="300"/>
+  
+  <update_node id="existing-id" x="100" y="200" content="Updated text"/>
+  
+  <delete_node id="node-to-remove"/>
+  
+  <add_edge id="edge1" from="node1" to="node2" fromSide="right" toSide="left" label="connects"/>
+  
+  <delete_edge id="edge-to-remove"/>
+</canvas_edit>
+
+Node types: text (content in inner text), file (requires "file" attr), link (requires "url" attr), group (optional "label" attr)
+Position: x, y are coordinates; width, height are dimensions
+Each operation executes immediately as parsed. Use unique IDs for new nodes.`;
 import {
   deduplicateSources,
   executeSequentialToolCall,
@@ -46,7 +73,7 @@ import {
 } from "./utils/AgentReasoningState";
 import { QueryExpander } from "@/search/v3/QueryExpander";
 import { CanvasOperationStreamer, containsCanvasEdit } from "./CanvasOperationStreamer";
-import { executeCanvasOperation, setCanvasToolVault } from "@/tools/CanvasTools";
+import { executeCanvasOperation } from "@/tools/CanvasTools";
 
 type AgentSource = {
   title: string;
@@ -97,7 +124,6 @@ interface ReActLoopParams {
   updateCurrentAiMessage: (message: string) => void;
   processLocalSearchResult: AgentLoopDeps["processLocalSearchResult"];
   applyCiCOrderingToLocalSearchResult: AgentLoopDeps["applyCiCOrderingToLocalSearchResult"];
-  adapter: ModelAdapter;
 }
 
 /**
@@ -294,27 +320,29 @@ export class AutonomousAgentChainRunner extends CopilotPlusChainRunner {
    */
   public static async generateSystemPrompt(
     availableTools: StructuredTool[],
-    _adapter?: ModelAdapter, // Unused, kept for backwards compatibility with tests
     userMemoryManager?: UserMemoryManager
   ): Promise<string> {
     const basePrompt = await getSystemPromptWithMemory(userMemoryManager);
 
-    // Get tool metadata for custom instructions (semantic guidance only)
+    // Get tool metadata for custom instructions
     const registry = ToolRegistry.getInstance();
     const toolMetadata = availableTools
       .map((tool) => registry.getToolMetadata(tool.name))
       .filter((meta): meta is NonNullable<typeof meta> => meta !== undefined);
 
-    // Build tool-specific instructions from metadata (no XML format needed)
+    // Add Canvas instructions
+    const systemPrompt = basePrompt + "\n\n" + CANVAS_MODIFICATION_INSTRUCTIONS;
+
+    // Fallback behavior if no adapter provided
     const toolInstructions = toolMetadata
       .filter((meta) => meta.customPromptInstructions)
       .map((meta) => `For ${meta.displayName}: ${meta.customPromptInstructions}`)
       .join("\n");
 
     if (toolInstructions) {
-      return `${basePrompt}\n\n## Tool Guidelines\n${toolInstructions}`;
+      return `${systemPrompt}\n\n## Tool Guidelines\n${toolInstructions}`;
     }
-    return basePrompt;
+    return systemPrompt;
   }
 
   /**
@@ -379,7 +407,6 @@ export class AutonomousAgentChainRunner extends CopilotPlusChainRunner {
     });
 
     const chatModel = this.chainManager.chatModelManager.getChatModel();
-    const adapter = ModelAdapterFactory.createAdapter(chatModel);
     // Agent mode should never show thinking tokens in the response
     const thinkStreamer = new ThinkBlockStreamer(updateCurrentAiMessage, true);
 
@@ -430,7 +457,6 @@ export class AutonomousAgentChainRunner extends CopilotPlusChainRunner {
         updateCurrentAiMessage,
         processLocalSearchResult: context.loopDeps.processLocalSearchResult,
         applyCiCOrderingToLocalSearchResult: context.loopDeps.applyCiCOrderingToLocalSearchResult,
-        adapter,
       });
 
       // If abort was already handled by timer, skip further processing
@@ -536,7 +562,7 @@ export class AutonomousAgentChainRunner extends CopilotPlusChainRunner {
     if (typeof chatModel.bindTools !== "function") {
       throw new Error(
         `Model ${modelName} does not support native tool calling (bindTools not available). ` +
-        `Agent mode requires a model with tool calling support.`
+          `Agent mode requires a model with tool calling support.`
       );
     }
     const boundModel = chatModel.bindTools(availableTools);
@@ -561,33 +587,16 @@ export class AutonomousAgentChainRunner extends CopilotPlusChainRunner {
     // Get memory for chat history loading
     const memory = this.chainManager.memoryManager.getMemory();
 
-    // Build system message: L1+L2 from envelope + tool guidelines from metadata
+    // Build system message: L1+L2 from envelope
     const systemMessage = baseMessages.find((m) => m.role === "system");
+    const baseSystemContent = systemMessage?.content || "";
 
-    // Get tool metadata for semantic guidance (no XML format instructions needed)
-    const registry = ToolRegistry.getInstance();
-    const toolMetadata = availableTools
-      .map((tool) => registry.getToolMetadata(tool.name))
-      .filter((meta): meta is NonNullable<typeof meta> => meta !== undefined);
-
-    // Build tool-specific instructions from metadata
-    const toolInstructions = toolMetadata
-      .filter((meta) => meta.customPromptInstructions)
-      .map((meta) => `For ${meta.displayName}: ${meta.customPromptInstructions}`)
-      .join("\n");
-
-    // Combine system message with tool guidelines
-    const systemContent = [
-      systemMessage?.content || "",
-      toolInstructions ? `\n## Tool Guidelines\n${toolInstructions}` : "",
-    ]
-      .filter(Boolean)
-      .join("\n\n");
+    // Get tool metadata
+    // Add Canvas instructions manually
+    const enhancedSystemPrompt = baseSystemContent + "\n\n" + CANVAS_MODIFICATION_INSTRUCTIONS;
 
     // Use SystemMessage for better provider compatibility
-    if (systemContent) {
-      messages.push(new SystemMessage({ content: systemContent }));
-    }
+    messages.push(new SystemMessage({ content: enhancedSystemPrompt }));
 
     // Extract L5 for original prompt
     const l5User = envelope.layers.find((l) => l.id === "L5_USER");
@@ -716,9 +725,7 @@ export class AutonomousAgentChainRunner extends CopilotPlusChainRunner {
         }
 
         // Final update with complete content including canvas summary if present
-        let finalResponse = reasoningBlock
-          ? reasoningBlock + "\n\n" + finalContent
-          : finalContent;
+        let finalResponse = reasoningBlock ? reasoningBlock + "\n\n" + finalContent : finalContent;
 
         if (canvasSummary) {
           finalResponse += "\n\n" + canvasSummary;
@@ -918,7 +925,7 @@ export class AutonomousAgentChainRunner extends CopilotPlusChainRunner {
     // Use ThinkBlockStreamer with excludeThinking=true to strip thinking content
     // Agent mode should never show thinking tokens in the response
     const thinkStreamer = new ThinkBlockStreamer(
-      () => { }, // No-op update function - we don't display intermediate content
+      () => {}, // No-op update function - we don't display intermediate content
       true // excludeThinking = true for agent mode
     );
 
@@ -1005,7 +1012,6 @@ export class AutonomousAgentChainRunner extends CopilotPlusChainRunner {
       return { summary: null, successCount: 0, failCount: 0 };
     }
 
-    setCanvasToolVault(vault);
     const operationStreamer = new CanvasOperationStreamer();
 
     // Collect operations from the async generator to check count and get canvas path

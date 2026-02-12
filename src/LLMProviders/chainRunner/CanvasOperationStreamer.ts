@@ -217,6 +217,7 @@ export class CanvasOperationStreamer {
           label: attrs.label || undefined,
         });
         this.buffer = this.buffer.replace(match[0], "");
+        addNodeWithContentPattern.lastIndex = 0;
       }
     }
 
@@ -239,6 +240,7 @@ export class CanvasOperationStreamer {
           label: attrs.label || undefined,
         });
         this.buffer = this.buffer.replace(match[0], "");
+        addNodeSelfClosingPattern.lastIndex = 0;
       }
     }
 
@@ -262,6 +264,7 @@ export class CanvasOperationStreamer {
           updates,
         });
         this.buffer = this.buffer.replace(match[0], "");
+        updateNodePattern.lastIndex = 0;
       }
     }
 
@@ -274,6 +277,7 @@ export class CanvasOperationStreamer {
           id: attrs.id,
         });
         this.buffer = this.buffer.replace(match[0], "");
+        deleteNodePattern.lastIndex = 0;
       }
     }
 
@@ -293,6 +297,7 @@ export class CanvasOperationStreamer {
           color: attrs.color || undefined,
         });
         this.buffer = this.buffer.replace(match[0], "");
+        addEdgePattern.lastIndex = 0;
       }
     }
 
@@ -305,6 +310,7 @@ export class CanvasOperationStreamer {
           id: attrs.id,
         });
         this.buffer = this.buffer.replace(match[0], "");
+        deleteEdgePattern.lastIndex = 0;
       }
     }
 

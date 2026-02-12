@@ -9,6 +9,9 @@ import { AIMessage, AIMessageChunk } from "@langchain/core/messages";
 import type { BaseMessage, UsageMetadata } from "@langchain/core/messages";
 import { ChatGenerationChunk } from "@langchain/core/outputs";
 import type { ChatGeneration, ChatResult } from "@langchain/core/outputs";
+import type { StructuredToolInterface } from "@langchain/core/tools";
+import { isInteropZodSchema } from "@langchain/core/utils/types";
+import { toJsonSchema } from "@langchain/core/utils/json_schema";
 import { VertexAIAuth } from "./VertexAIAuth";
 
 type FetchImplementation = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
@@ -52,6 +55,9 @@ export class VertexAIChatModel extends BaseChatModel<VertexAIChatModelCallOption
   // Public modelName property for LangChain capability detection
   public readonly modelName: string;
 
+  // Tools bound via bindTools() for native tool calling
+  private boundTools?: StructuredToolInterface[];
+
   constructor(fields: VertexAIChatModelFields) {
     const {
       modelId,
@@ -93,6 +99,85 @@ export class VertexAIChatModel extends BaseChatModel<VertexAIChatModelCallOption
   }
 
   /**
+   * Bind tools to this model for native tool calling.
+   * Returns a new instance with tools bound.
+   */
+  bindTools(tools: StructuredToolInterface[]): VertexAIChatModel {
+    const bound = Object.create(this) as VertexAIChatModel;
+    bound.boundTools = tools;
+    return bound;
+  }
+
+  /**
+   * Convert LangChain tools to Vertex AI function declarations.
+   */
+  private convertToolsToVertex(tools: StructuredToolInterface[]): any[] {
+    if (!tools || tools.length === 0) return [];
+
+    const functionDeclarations = tools.map((tool) => {
+      const parameters: any = { type: "OBJECT", properties: {} };
+      if (tool.schema) {
+        const rawSchema = isInteropZodSchema(tool.schema) ? toJsonSchema(tool.schema) : tool.schema;
+
+        // Ensure rawSchema is an object
+        if (typeof rawSchema === "object") {
+          // Clean the schema for Vertex AI compatibility
+          Object.assign(parameters, this.cleanSchemaForVertex(rawSchema));
+        }
+      }
+      return {
+        name: tool.name,
+        description: tool.description || "",
+        parameters: parameters,
+      };
+    });
+
+    return [{ function_declarations: functionDeclarations }];
+  }
+
+  /**
+   * Clean and normalize JSON schema for Vertex AI compatibility.
+   * Recursively removes unsupported fields ($schema, additionalProperties) and uppercases types.
+   */
+  private cleanSchemaForVertex(schema: any): any {
+    if (!schema || typeof schema !== "object") return schema;
+
+    // Clone to avoid mutating original
+    const newSchema = { ...schema };
+
+    // Remove unsupported fields that cause errors in Vertex AI
+    delete newSchema.$schema;
+    delete newSchema.additionalProperties;
+    // title/description in schema are fine but optional
+
+    // Vertex AI / Gemini requires types to be UPPERCASE strings
+    if (typeof newSchema.type === "string") {
+      newSchema.type = newSchema.type.toUpperCase();
+    }
+
+    // Recursively clean 'properties'
+    if (newSchema.properties && typeof newSchema.properties === "object") {
+      const newProps: any = {};
+      for (const key in newSchema.properties) {
+        newProps[key] = this.cleanSchemaForVertex(newSchema.properties[key]);
+      }
+      newSchema.properties = newProps;
+    }
+
+    // Recursively clean 'items' (for arrays)
+    if (newSchema.items) {
+      newSchema.items = this.cleanSchemaForVertex(newSchema.items);
+    }
+
+    // Recursively clean 'allOf', 'anyOf', 'oneOf' if present (though Vertex support varies)
+    if (Array.isArray(newSchema.allOf)) {
+      newSchema.allOf = newSchema.allOf.map((s: any) => this.cleanSchemaForVertex(s));
+    }
+
+    return newSchema;
+  }
+
+  /**
    * Get the Vertex AI endpoint URL for the model.
    * Handles third-party models that include their own publishers prefix (e.g., publishers/qwen/models/qwen3-embedding).
    */
@@ -131,10 +216,17 @@ export class VertexAIChatModel extends BaseChatModel<VertexAIChatModelCallOption
       generationConfig.topP = topP;
     }
 
-    return {
+    const requestBody: Record<string, unknown> = {
       contents,
       generationConfig: Object.keys(generationConfig).length > 0 ? generationConfig : undefined,
     };
+
+    // Add tools if bound
+    if (this.boundTools && this.boundTools.length > 0) {
+      requestBody.tools = this.convertToolsToVertex(this.boundTools);
+    }
+
+    return requestBody;
   }
 
   /**
@@ -170,25 +262,46 @@ export class VertexAIChatModel extends BaseChatModel<VertexAIChatModelCallOption
   }
 
   /**
-   * Extract text from Vertex AI response.
+   * Extract text and tool calls from Vertex AI response.
    */
-  private extractText(response: Record<string, unknown>): string {
+  private extractContent(response: Record<string, unknown>): {
+    text: string;
+    toolCalls: any[];
+  } {
     const candidates = response.candidates as Array<Record<string, unknown>> | undefined;
     if (!candidates || candidates.length === 0) {
-      return "";
+      return { text: "", toolCalls: [] };
     }
 
     const content = candidates[0].content as Record<string, unknown> | undefined;
     if (!content) {
-      return "";
+      return { text: "", toolCalls: [] };
     }
 
     const parts = content.parts as Array<Record<string, unknown>> | undefined;
     if (!parts || parts.length === 0) {
-      return "";
+      return { text: "", toolCalls: [] };
     }
 
-    return parts.map((part) => part.text || "").join("");
+    let text = "";
+    const toolCalls: any[] = [];
+
+    for (const part of parts) {
+      if (part.text) {
+        text += part.text;
+      }
+      if (part.functionCall) {
+        const fc = part.functionCall as { name: string; args: any };
+        toolCalls.push({
+          name: fc.name,
+          args: fc.args || {},
+          id: `call_${fc.name}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+          type: "tool_call",
+        });
+      }
+    }
+
+    return { text, toolCalls };
   }
 
   /**
@@ -230,7 +343,7 @@ export class VertexAIChatModel extends BaseChatModel<VertexAIChatModelCallOption
     }
 
     const data = await response.json();
-    const text = this.extractText(data);
+    const { text, toolCalls } = this.extractContent(data);
 
     if (runManager && text) {
       await runManager.handleLLMNewToken(text);
@@ -251,6 +364,7 @@ export class VertexAIChatModel extends BaseChatModel<VertexAIChatModelCallOption
       content: text,
       response_metadata: responseMetadata,
       usage_metadata: usage,
+      tool_calls: toolCalls.length > 0 ? toolCalls : undefined,
     });
 
     const generation: ChatGeneration = {
@@ -317,12 +431,26 @@ export class VertexAIChatModel extends BaseChatModel<VertexAIChatModelCallOption
 
             try {
               const data = JSON.parse(jsonStr);
-              const text = this.extractText(data);
+              const { text, toolCalls } = this.extractContent(data);
 
-              if (text) {
+              // We'll yield chunks for text or tool calls
+              if (text || (toolCalls && toolCalls.length > 0)) {
+                // Construct proper tool call chunks for LangChain
+                let toolCallChunks: any[] | undefined = undefined;
+                if (toolCalls && toolCalls.length > 0) {
+                  toolCallChunks = toolCalls.map((tc) => ({
+                    name: tc.name,
+                    args: JSON.stringify(tc.args),
+                    id: tc.id,
+                    index: 0,
+                    type: "tool_call_chunk",
+                  }));
+                }
+
                 const messageChunk = new AIMessageChunk({
                   content: text,
                   response_metadata: { provider: "google-vertexai" },
+                  tool_call_chunks: toolCallChunks,
                 });
 
                 const generationChunk = new ChatGenerationChunk({
@@ -333,12 +461,12 @@ export class VertexAIChatModel extends BaseChatModel<VertexAIChatModelCallOption
 
                 yield generationChunk;
 
-                if (runManager) {
+                if (runManager && text) {
                   await runManager.handleLLMNewToken(text);
                 }
               }
-            } catch {
-              logWarn(`[${requestId}] Failed to parse SSE data: ${jsonStr}`);
+            } catch (err) {
+              logWarn(`[${requestId}] Failed to parse SSE data: ${jsonStr}, error: ${err}`);
             }
           }
         }

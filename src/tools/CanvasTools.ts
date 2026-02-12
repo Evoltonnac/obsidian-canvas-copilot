@@ -22,8 +22,6 @@ import {
   AddEdgeOperation,
   DeleteEdgeOperation,
 } from "@/LLMProviders/chainRunner/CanvasOperationStreamer";
-import { z } from "zod";
-import { createTool } from "./SimpleTool";
 
 /* ---------- Canvas I/O ---------- */
 
@@ -342,93 +340,4 @@ function executeDeleteEdge(canvasData: CanvasData, op: DeleteEdgeOperation): Ope
 
   canvasData.edges.splice(edgeIndex, 1);
   return { success: true, affectedIds: [op.id] };
-}
-
-/* ---------- Read Canvas Tool ---------- */
-
-const readCanvasSchema = z.object({
-  canvasPath: z.string().describe("Path to the canvas file (e.g., 'folder/my-canvas.canvas')"),
-  nodeIds: z
-    .array(z.string())
-    .optional()
-    .describe("Optional list of node IDs to filter. If not provided, returns all nodes."),
-});
-
-// Store vault reference for tool execution
-let _vaultRef: Vault | null = null;
-
-export function setCanvasToolVault(vault: Vault): void {
-  _vaultRef = vault;
-}
-
-/**
- * Tool for reading canvas contents.
- */
-export const readCanvasTool = createTool({
-  name: "readCanvas",
-  description:
-    "Read the structure and contents of a canvas file. Returns node and edge information for context.",
-  schema: readCanvasSchema,
-  isBackground: false,
-  handler: async (params): Promise<string> => {
-    if (!_vaultRef) {
-      return "Vault not available";
-    }
-
-    const canvasData = await readCanvasFile(_vaultRef, params.canvasPath);
-    if (!canvasData) {
-      return `Failed to read canvas: ${params.canvasPath}`;
-    }
-
-    let nodes = canvasData.nodes;
-    if (params.nodeIds && params.nodeIds.length > 0) {
-      const idSet = new Set(params.nodeIds);
-      nodes = nodes.filter((n) => idSet.has(n.id));
-    }
-
-    // Format for LLM
-    return formatCanvasForLLM(canvasData, nodes);
-  },
-});
-
-/**
- * Format canvas data for LLM consumption.
- */
-function formatCanvasForLLM(canvasData: CanvasData, nodes: AllCanvasNodeData[]): string {
-  const lines: string[] = [];
-  lines.push(
-    `Canvas contains ${canvasData.nodes.length} nodes and ${canvasData.edges.length} edges.\n`
-  );
-
-  lines.push("## Nodes\n");
-  for (const node of nodes) {
-    lines.push(`### Node: ${node.id} (${node.type})`);
-    lines.push(`Position: (${node.x}, ${node.y}) Size: ${node.width}x${node.height}`);
-
-    switch (node.type) {
-      case "text":
-        lines.push(`Content: ${(node as CanvasTextData).text}`);
-        break;
-      case "file":
-        lines.push(`File: ${(node as CanvasFileData).file}`);
-        break;
-      case "link":
-        lines.push(`URL: ${(node as CanvasLinkData).url}`);
-        break;
-      case "group":
-        lines.push(`Label: ${(node as CanvasGroupData).label || "(no label)"}`);
-        break;
-    }
-    lines.push("");
-  }
-
-  if (canvasData.edges.length > 0) {
-    lines.push("## Edges\n");
-    for (const edge of canvasData.edges) {
-      const labelPart = edge.label ? ` "${edge.label}"` : "";
-      lines.push(`- ${edge.fromNode} → ${edge.toNode}${labelPart}`);
-    }
-  }
-
-  return lines.join("\n");
 }
