@@ -24,7 +24,11 @@ import { checkIsPlusUser } from "@/plusUtils";
 import CopilotPlugin from "@/main";
 import { getAllQAMarkdownContent } from "@/search/searchUtils";
 import { CopilotSettings } from "@/settings/model";
-import { NoteSelectedTextContext, WebSelectedTextContext } from "@/types/message";
+import {
+  NoteSelectedTextContext,
+  WebSelectedTextContext,
+  CanvasSelectedNodesContext,
+} from "@/types/message";
 import { ensureFolderExists, isSourceModeOn } from "@/utils";
 import { Editor, MarkdownView, Notice, TFile } from "obsidian";
 import { v4 as uuidv4 } from "uuid";
@@ -608,5 +612,67 @@ export function registerCommands(
     // Show the Quick Ask panel (pass activeView for leaf binding)
     plugin.quickAskController.show(activeView, view);
     return true;
+  });
+
+  // Add canvas selection to chat context command
+  addCommand(plugin, COMMAND_IDS.ADD_CANVAS_SELECTION_TO_CHAT_CONTEXT, async () => {
+    // Get the active canvas view
+    const activeLeaf = plugin.app.workspace.activeLeaf;
+    if (!activeLeaf) {
+      new Notice("No active view");
+      return;
+    }
+
+    const view = activeLeaf.view;
+    // Check if it's a canvas view (canvas views have a 'canvas' property)
+    const canvas = (view as any)?.canvas;
+    if (!canvas) {
+      new Notice("Not a canvas view. Please open a canvas file first.");
+      return;
+    }
+
+    // Get selected nodes from canvas
+    const selection = canvas.selection;
+    if (!selection || selection.size === 0) {
+      new Notice("No nodes selected in canvas");
+      return;
+    }
+
+    // Get selected node IDs
+    const selectedNodeIds: string[] = [];
+    for (const node of selection) {
+      if (node.id) {
+        selectedNodeIds.push(node.id);
+      }
+    }
+
+    if (selectedNodeIds.length === 0) {
+      new Notice("No valid nodes selected");
+      return;
+    }
+
+    // Get canvas file info
+    const canvasFile = (view as any).file;
+    if (!canvasFile) {
+      new Notice("Could not determine canvas file");
+      return;
+    }
+
+    // Create canvas selected nodes context
+    const canvasContext: CanvasSelectedNodesContext = {
+      id: uuidv4(),
+      sourceType: "canvas",
+      canvasTitle: canvasFile.basename,
+      canvasPath: canvasFile.path,
+      selectedNodeIds,
+    };
+
+    // Mutually exclusive: only keep the latest selection
+    setSelectedTextContexts([canvasContext]);
+
+    // Open chat window to show the context was added
+    plugin.activateView();
+
+    new Notice(`Added ${selectedNodeIds.length} canvas node(s) to chat context`);
   });
 }

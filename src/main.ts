@@ -12,7 +12,7 @@ import CopilotView from "@/components/CopilotView";
 import { APPLY_VIEW_TYPE, ApplyView } from "@/components/composer/ApplyView";
 import { LoadChatHistoryModal } from "@/components/modals/LoadChatHistoryModal";
 
-import { registerContextMenu } from "@/commands/contextMenu";
+import { registerContextMenu, registerCanvasContextMenu } from "@/commands/contextMenu";
 import { CustomCommandRegister } from "@/commands/customCommandRegister";
 import { migrateCommands, suggestDefaultCommands } from "@/commands/migrator";
 import { migrateSystemPromptsFromSettings } from "@/system-prompts/migration";
@@ -44,6 +44,7 @@ import { ChatUIState } from "@/state/ChatUIState";
 import { VaultDataManager } from "@/state/vaultDataAtoms";
 import { FileParserManager } from "@/tools/FileParserManager";
 import { initializeBuiltinTools } from "@/tools/builtinTools";
+
 import {
   ChatSelectionHighlightController,
   hideChatSelectionHighlight,
@@ -175,6 +176,20 @@ export default class CopilotPlugin extends Plugin {
     this.registerEvent(
       this.app.workspace.on("editor-menu", (menu: Menu) => {
         registerContextMenu(menu, this.app);
+      })
+    );
+
+    // Register canvas node context menu (undocumented Obsidian event)
+    this.registerEvent(
+      (this.app.workspace as any).on("canvas:node-menu", (menu: Menu) => {
+        return registerCanvasContextMenu(menu);
+      })
+    );
+
+    // Register canvas selection context menu for multi-selection (undocumented Obsidian event)
+    this.registerEvent(
+      (this.app.workspace as any).on("canvas:selection-menu", (menu: Menu) => {
+        return registerCanvasContextMenu(menu);
       })
     );
 

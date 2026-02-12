@@ -649,7 +649,11 @@ export class ContextProcessor {
     for (const selectedText of selectedTextContexts) {
       if (selectedText.sourceType === "web") {
         // Web selected text context
-        additionalContext += `\n\n<${WEB_SELECTED_TEXT_TAG}>\n<title>${escapeXml(selectedText.title)}</title>\n<url>${escapeXml(selectedText.url)}</url>\n<content>\n${escapeXml(selectedText.content)}\n</content>\n</${WEB_SELECTED_TEXT_TAG}>`;
+        additionalContext += `\n\n<${WEB_SELECTED_TEXT_TAG}>\n<title>${escapeXml(selectedText.title)}</title>\n<url>${escapeXml(selectedText.url)}</url>\n<content>\n${escapeXml(selectedText.content)}</content>\n</${WEB_SELECTED_TEXT_TAG}>`;
+      } else if (selectedText.sourceType === "canvas") {
+        // Canvas selected nodes context
+        const nodeIds = selectedText.selectedNodeIds.join(", ");
+        additionalContext += `\n\n<canvas_selected_nodes>\n<title>${escapeXml(selectedText.canvasTitle)}</title>\n<path>${escapeXml(selectedText.canvasPath)}</path>\n<node_ids>${escapeXml(nodeIds)}</node_ids>\n</canvas_selected_nodes>`;
       } else {
         // Note selected text context (default for backward compatibility)
         additionalContext += `\n\n<${SELECTED_TEXT_TAG}>\n<title>${escapeXml(selectedText.noteTitle)}</title>\n<path>${escapeXml(selectedText.notePath)}</path>\n<start_line>${selectedText.startLine.toString()}</start_line>\n<end_line>${selectedText.endLine.toString()}</end_line>\n<content>\n${selectedText.content}\n</content>\n</${SELECTED_TEXT_TAG}>`;

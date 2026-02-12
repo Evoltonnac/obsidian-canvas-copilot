@@ -164,7 +164,11 @@ function MessageContext({ context }: { context: ChatMessage["context"] }) {
             </div>
           </TooltipTrigger>
           <TooltipContent className="tw-max-w-sm tw-break-words">
-            {selectedText.sourceType === "web" ? selectedText.url : selectedText.notePath}
+            {selectedText.sourceType === "web"
+              ? selectedText.url
+              : selectedText.sourceType === "canvas"
+                ? selectedText.canvasPath
+                : selectedText.notePath}
           </TooltipContent>
         </Tooltip>
       ))}

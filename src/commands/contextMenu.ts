@@ -77,3 +77,47 @@ export function registerContextMenu(menu: Menu, obsidianApp: App): void {
     });
   });
 }
+
+/**
+ * Register context menu for canvas node right-click.
+ * This adds a "Copilot" submenu with an option to add selected canvas nodes to chat context.
+ */
+export function registerCanvasContextMenu(menu: Menu) {
+  // Create the main "Copilot" submenu for canvas
+  menu.addItem((item) => {
+    item.setTitle("Copilot");
+    (item as any).setSubmenu();
+
+    const submenu = (item as any).submenu;
+    if (!submenu) return;
+
+    // Add the canvas selection command
+    submenu.addItem((subItem: any) => {
+      subItem.setTitle("Add selection to chat context").onClick(() => {
+        (app as any).commands.executeCommandById(
+          `copilot:${COMMAND_IDS.ADD_CANVAS_SELECTION_TO_CHAT_CONTEXT}`
+        );
+      });
+    });
+
+    // Get custom commands
+    const commands = getCachedCustomCommands();
+    const visibleCustomCommands = commands.filter(
+      (command: CustomCommand) => command.showInContextMenu
+    );
+
+    // Add separator if there are custom commands
+    if (visibleCustomCommands.length > 0) {
+      submenu.addSeparator();
+    }
+
+    // Add custom commands to submenu
+    sortCommandsByOrder(visibleCustomCommands).forEach((command: CustomCommand) => {
+      submenu.addItem((subItem: any) => {
+        subItem.setTitle(command.title).onClick(() => {
+          (app as any).commands.executeCommandById(`copilot:${getCommandId(command.title)}`);
+        });
+      });
+    });
+  });
+}

@@ -40,9 +40,23 @@ export interface WebSelectedTextContext extends BaseSelectedTextContext {
 }
 
 /**
- * Union type for selected text context (note or web)
+ * Context for selected nodes from canvas
  */
-export type SelectedTextContext = NoteSelectedTextContext | WebSelectedTextContext;
+export interface CanvasSelectedNodesContext {
+  id: string;
+  sourceType: "canvas";
+  canvasTitle: string;
+  canvasPath: string;
+  selectedNodeIds: string[];
+}
+
+/**
+ * Union type for selected text context (note, web, or canvas)
+ */
+export type SelectedTextContext =
+  | NoteSelectedTextContext
+  | WebSelectedTextContext
+  | CanvasSelectedNodesContext;
 
 /**
  * Type guard for note selected text context
@@ -58,6 +72,15 @@ export function isNoteSelectedTextContext(
  */
 export function isWebSelectedTextContext(ctx: SelectedTextContext): ctx is WebSelectedTextContext {
   return ctx.sourceType === "web";
+}
+
+/**
+ * Type guard for canvas selected nodes context
+ */
+export function isCanvasSelectedNodesContext(
+  ctx: SelectedTextContext
+): ctx is CanvasSelectedNodesContext {
+  return ctx.sourceType === "canvas";
 }
 
 /**
@@ -118,6 +141,9 @@ export interface StreamingResult {
 
   /** Token usage statistics (may be null if not yet available) */
   tokenUsage: TokenUsage | null;
+
+  /** Optional canvas operation summary generated during streaming */
+  canvasSummary?: string | null;
 }
 
 /**

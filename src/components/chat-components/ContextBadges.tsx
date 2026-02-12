@@ -6,7 +6,13 @@ import { TruncatedText } from "@/components/TruncatedText";
 import { getDomainFromUrl } from "@/utils";
 import { cn } from "@/lib/utils";
 import { ContextBadgeWrapper } from "./ContextBadgeWrapper";
-import { SelectedTextContext, WebTabContext, isWebSelectedTextContext } from "@/types/message";
+import {
+  SelectedTextContext,
+  WebTabContext,
+  isWebSelectedTextContext,
+  isNoteSelectedTextContext,
+  isCanvasSelectedNodesContext,
+} from "@/types/message";
 
 interface BaseContextBadgeProps {
   onRemove?: () => void;
@@ -357,7 +363,46 @@ export function ContextSelectedTextBadge({
     );
   }
 
-  // Handle note selected text (default)
+  // Handle canvas selected nodes
+  if (isCanvasSelectedNodesContext(selectedText)) {
+    const nodeCount = selectedText.selectedNodeIds.length;
+    const tooltipContent = (
+      <div className="tw-text-left">
+        {selectedText.canvasPath} ({nodeCount} nodes)
+      </div>
+    );
+
+    return (
+      <ContextBadgeWrapper hasRemoveButton={!!onRemove}>
+        <div className="tw-flex tw-items-center tw-gap-1">
+          <FileText className="tw-size-3" />
+          <TruncatedText className="tw-max-w-40" tooltipContent={tooltipContent} alwaysShowTooltip>
+            {selectedText.canvasTitle}
+          </TruncatedText>
+          <span className="tw-text-xs tw-text-faint">
+            {nodeCount} node{nodeCount !== 1 ? "s" : ""}
+          </span>
+        </div>
+        {onRemove && (
+          <Button
+            variant="ghost2"
+            size="fit"
+            onClick={onRemove}
+            aria-label="Remove from context"
+            className="tw-text-muted"
+          >
+            <X className="tw-size-4" />
+          </Button>
+        )}
+      </ContextBadgeWrapper>
+    );
+  }
+
+  // Handle note selected text (must be note at this point)
+  if (!isNoteSelectedTextContext(selectedText)) {
+    return null;
+  }
+
   const lineRange =
     selectedText.startLine === selectedText.endLine
       ? `L${selectedText.startLine}`

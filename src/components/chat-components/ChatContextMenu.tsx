@@ -12,7 +12,13 @@ import {
   ContextFolderBadge,
   FaviconOrGlobe,
 } from "@/components/chat-components/ContextBadges";
-import { SelectedTextContext, WebTabContext, isWebSelectedTextContext } from "@/types/message";
+import {
+  SelectedTextContext,
+  WebTabContext,
+  isWebSelectedTextContext,
+  isNoteSelectedTextContext,
+  isCanvasSelectedNodesContext,
+} from "@/types/message";
 import { ChainType } from "@/chainFactory";
 import { Separator } from "@/components/ui/separator";
 import { useChainType, useIndexingProgress } from "@/aiParams";
@@ -69,7 +75,36 @@ function ContextSelection({
     );
   }
 
+  // Handle canvas selected nodes
+  if (isCanvasSelectedNodesContext(selectedText)) {
+    const nodeCount = selectedText.selectedNodeIds.length;
+    return (
+      <Badge className="tw-items-center tw-py-0 tw-pl-2 tw-pr-0.5 tw-text-xs">
+        <div className="tw-flex tw-items-center tw-gap-1">
+          <FileText className="tw-size-3" />
+          <span className="tw-max-w-40 tw-truncate">{selectedText.canvasTitle}</span>
+          <span className="tw-text-xs tw-text-faint">
+            {nodeCount} node{nodeCount !== 1 ? "s" : ""}
+          </span>
+        </div>
+        <Button
+          variant="ghost2"
+          size="fit"
+          onClick={() => onRemoveContext("selectedText", selectedText.id)}
+          aria-label="Remove from context"
+          className="tw-text-muted"
+        >
+          <X className="tw-size-4" />
+        </Button>
+      </Badge>
+    );
+  }
+
   // Handle note selected text (default)
+  if (!isNoteSelectedTextContext(selectedText)) {
+    return null;
+  }
+
   const lineRange =
     selectedText.startLine === selectedText.endLine
       ? `L${selectedText.startLine}`
