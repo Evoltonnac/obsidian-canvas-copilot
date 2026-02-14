@@ -44,6 +44,7 @@ import { ChatUIState } from "@/state/ChatUIState";
 import { VaultDataManager } from "@/state/vaultDataAtoms";
 import { FileParserManager } from "@/tools/FileParserManager";
 import { initializeBuiltinTools } from "@/tools/builtinTools";
+import { McpServerManager } from "@/mcp/McpServerManager";
 
 import {
   ChatSelectionHighlightController,
@@ -109,6 +110,13 @@ export default class CopilotPlugin extends Plugin {
 
     // Initialize built-in tools with vault access
     initializeBuiltinTools(this.app.vault);
+
+    // Initialize MCP server connections from settings
+    const mcpManager = McpServerManager.getInstance();
+    const mcpServers = getSettings().mcpServers ?? [];
+    if (mcpServers.length > 0) {
+      mcpManager.initializeFromConfigs(mcpServers);
+    }
 
     // Initialize BrevilabsClient
     this.brevilabsClient = BrevilabsClient.getInstance();
@@ -255,6 +263,9 @@ export default class CopilotPlugin extends Plugin {
     this.customCommandRegister.cleanup();
     this.systemPromptRegister.cleanup();
     this.settingsUnsubscriber?.();
+
+    // Cleanup MCP server connections
+    McpServerManager.getInstance().cleanup();
 
     // Cleanup selection handler
     this.cleanupSelectionHandler();

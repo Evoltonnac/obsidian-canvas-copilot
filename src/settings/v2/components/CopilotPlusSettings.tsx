@@ -4,6 +4,7 @@ import { SettingItem } from "@/components/ui/setting-item";
 import { useIsSelfHostEligible, validateSelfHostMode } from "@/plusUtils";
 import { updateSetting, useSettingsValue } from "@/settings/model";
 import React, { useState } from "react";
+import { McpSettingsSection } from "./McpSettingsSection";
 import { ToolSettingsSection } from "./ToolSettingsSection";
 
 export const CopilotPlusSettings: React.FC = () => {
@@ -50,6 +51,10 @@ export const CopilotPlusSettings: React.FC = () => {
           {settings.enableAutonomousAgent && (
             <>
               <ToolSettingsSection />
+
+              <div className="tw-mt-4 tw-rounded-lg tw-bg-secondary tw-p-4">
+                <McpSettingsSection />
+              </div>
             </>
           )}
 

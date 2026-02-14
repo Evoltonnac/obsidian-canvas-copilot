@@ -71,6 +71,22 @@ export async function encryptAllKeys(
     );
   }
 
+  // Encrypt sensitive headers in MCP server configurations
+  if (Array.isArray(settings.mcpServers)) {
+    newSettings.mcpServers = await Promise.all(
+      settings.mcpServers.map(async (server) => {
+        if (!server.headers) return server;
+        const encryptedHeaders: Record<string, string> = {};
+        for (const [key, value] of Object.entries(server.headers)) {
+          // Encrypt headers that likely contain sensitive information
+          const isSensitive = /^(authorization|x-api-key|api-key|token|bearer|secret)/i.test(key);
+          encryptedHeaders[key] = isSensitive ? await getEncryptedKey(value) : value;
+        }
+        return { ...server, headers: encryptedHeaders };
+      })
+    );
+  }
+
   return newSettings;
 }
 

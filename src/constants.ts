@@ -952,6 +952,7 @@ export const DEFAULT_SETTINGS: CopilotSettings = {
   userSystemPromptsFolder: DEFAULT_SYSTEM_PROMPTS_FOLDER,
   defaultSystemPromptTitle: "",
   autoCompactThreshold: 128000,
+  mcpServers: [],
 };
 
 export const EVENT_NAMES = {

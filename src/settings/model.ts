@@ -1,4 +1,5 @@
 import { CustomModel, ProjectConfig } from "@/aiParams";
+import { McpServerConfig } from "@/mcp/McpHttpClient";
 import { atom, createStore, useAtomValue } from "jotai";
 import { v4 as uuidv4 } from "uuid";
 
@@ -186,6 +187,8 @@ export interface CopilotSettings {
   defaultSystemPromptTitle: string;
   /** Token threshold for auto-compacting large context (range: 64k-1M tokens, default: 128000) */
   autoCompactThreshold: number;
+  /** MCP server configurations for external tool integration */
+  mcpServers: McpServerConfig[];
 }
 
 export const settingsStore = createStore();

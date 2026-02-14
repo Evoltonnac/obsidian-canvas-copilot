@@ -18,6 +18,8 @@ export interface ToolMetadata {
   isBackground?: boolean; // If true, tool execution is not shown to user
   isPlusOnly?: boolean; // If true, tool requires Plus subscription
   requiresUserMessageContent?: boolean; // If true, tool receives original user message for URL extraction
+  mcpServerId?: string; // MCP server identifier for grouping MCP tools in UI
+  mcpServerName?: string; // MCP server display name for UI
 }
 
 /**
